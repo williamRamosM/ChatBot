@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from scriptAI import LunaAI
+from scriptAI import ScriptAI
 from service_tts import TTSService
 
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +24,7 @@ STATIC_DIR.mkdir(exist_ok=True)
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-luna = LunaAI()
+luna = ScriptAI()
 tts_service = TTSService(output_dir=str(STATIC_DIR))
 
 

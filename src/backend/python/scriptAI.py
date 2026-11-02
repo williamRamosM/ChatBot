@@ -3,7 +3,7 @@ from google import genai
 from google.genai import types
 
 
-class LunaAI:
+class ScriptAI:
     def __init__(self, model: str = "gemini-3.5-flash-lite"):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -12,7 +12,7 @@ class LunaAI:
         self.client = genai.Client(api_key=api_key)
         self.model = model
         self.system_prompt = """
-        Você é a 'Nasa', uma assistente robótica do futuro muito simpatica e prestativa.
+        Você é a 'Nasa', uma assistente muito simpatica e prestativa.
         Sempre responda de forma alegre e confortavel.
         Mantenha as respostas bem curtas (máximo de 2 frases).
         Não use formatação markdown, asteriscos ou emojis, pois o texto será lido por uma voz sintetizada.
