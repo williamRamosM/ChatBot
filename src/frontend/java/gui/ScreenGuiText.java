@@ -44,13 +44,7 @@ public class ScreenGuiText extends JFrame {
             public void keyPressed(KeyEvent e) {
                 if(e.getKeyCode() == KeyEvent.VK_ESCAPE) {
                     compilarMensagem("saindo [mande uma mensagem bem curta!]");
-                    try {
-                        Thread.sleep(12000);
-                    } catch (InterruptedException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                    System.out.println("System > Saindo...");
-                    System.exit(0);
+                    exit();
                 }
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
                     String text = chat.getText();
@@ -90,13 +84,41 @@ public class ScreenGuiText extends JFrame {
         });
         getContentPane().add(chat);
     }
-    public void compilarMensagem(String mensagem) {
-        try {
-            chatResponse = message.enviarMensagem(mensagem);
-            System.out.println("System > " + chatResponse.getTextResponse());
-            audio.tocarAudio(chatResponse.getAudioUrl());
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
+    private void compilarMensagem(String mensagem) {
+
+        SwingWorker <Void, Void> worker = new  SwingWorker<>() {
+            @Override
+            protected Void doInBackground() {
+                try {
+                    chatResponse = message.enviarMensagem(mensagem);
+                    System.out.println("System > " + chatResponse.getTextResponse());
+                    audio.tocarAudio(chatResponse.getAudioUrl());
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+                return null;
+            }
+            @Override
+            protected void done() {
+                System.out.println("System > Mensagem processada com sucesso!");
+            }
+        };
+        worker.execute();
+    }
+
+    private void exit() {
+        SwingWorker <Void, Void> worker = new  SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws InterruptedException {
+                Thread.sleep(12000);
+                return null;
+            }
+            @Override
+            protected void done() {
+                System.out.println("System > Saindo...");
+                System.exit(0);
+            }
+        };
+        worker.execute();
     }
 }
