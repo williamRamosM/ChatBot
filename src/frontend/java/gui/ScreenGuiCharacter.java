@@ -2,6 +2,7 @@ package gui;
 
 import models.CharacterProfile;
 import services.CharacterProfileService;
+import services.VoicePreviewService;
 
 import javax.swing.*;
 import javax.swing.text.JTextComponent;
@@ -11,12 +12,17 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 public class ScreenGuiCharacter extends JFrame {
 
-    private static final String DEFAULT_VOICE = "Voz padrão";
+    private static final List<VoiceOption> VOICES = List.of(
+            new VoiceOption("Voz padrão (Francisca)", null),
+            new VoiceOption("Antônio", "pt-BR-AntonioNeural"),
+            new VoiceOption("Thalita", "pt-BR-ThalitaMultilingualNeural")
+    );
     private static final String OTHER_GENDER = "Outro";
     private static final List<String> STANDARD_GENDERS = List.of("Feminino", "Masculino", "Neutro");
 
@@ -28,13 +34,16 @@ public class ScreenGuiCharacter extends JFrame {
     private final JComboBox<ProfileOption> characters = new JComboBox<>();
     private final JButton delete = roundedButton("Deletar", "personagens", new Color(185, 28, 28));
     private final JButton start = roundedButton("Iniciar", "personagem", new Color(29, 78, 216));
+    private final JButton listen = new JButton("Ouvir voz");
+    private final VoicePreviewService voicePreview = new VoicePreviewService();
+    private SwingWorker<Void, Void> previewWorker;
     private final JTextField name;
     private final JComboBox<String> gender;
     private final JTextField customGender;
     private final JTextField role;
     private final JTextArea personality;
     private final JComboBox<String> tone;
-    private final JComboBox<String> voice;
+    private final JComboBox<VoiceOption> voice;
     private final JTextArea restrictions;
     private final CharacterImagesPanel images = new CharacterImagesPanel(busy -> {
         importingImage = busy;
@@ -49,6 +58,13 @@ public class ScreenGuiCharacter extends JFrame {
             }
             String name = profile.name();
             return name == null || name.isBlank() ? "Personagem sem nome" : name;
+        }
+    }
+
+    private record VoiceOption(String label, String id) {
+        @Override
+        public String toString() {
+            return label;
         }
     }
 
@@ -78,10 +94,15 @@ public class ScreenGuiCharacter extends JFrame {
 
         role = addTextField("Função:", 145);
         personality = addTextArea("Personalidade:", 185);
-        tone = addDropdown("Tom de voz:", 260,
-                "Calmo", "Animado", "Sério", "Acolhedor", "Firme", "Provocador", "Ríspido");
+        tone = addDropdown("Tom de voz:", 260, new String[]{
+                "Calmo", "Animado", "Sério", "Acolhedor", "Firme", "Provocador", "Ríspido"});
         tone.setSelectedIndex(-1);
-        voice = addDropdown("Voz do personagem:", 300, DEFAULT_VOICE);
+        voice = addDropdown("Voz do personagem:", 300, VOICES.toArray(VoiceOption[]::new));
+        voice.setBounds(140, 300, 220, 30);
+        listen.setFont(new Font("Roboto", Font.PLAIN, 12));
+        listen.setBounds(370, 300, 110, 30);
+        listen.addActionListener(event -> listenToVoice());
+        add(listen);
         restrictions = addTextArea("Restrições:", 340);
 
         images.setBounds(20, 415, 460, 162);
@@ -121,8 +142,9 @@ public class ScreenGuiCharacter extends JFrame {
             if (!requireText(restrictions, "Restrições")) {
                 return;
             }
+            VoiceOption selectedVoice = (VoiceOption) voice.getSelectedItem();
             CharacterProfile profile = new CharacterProfile(name.getText(), selectedGender, role.getText(),
-                    personality.getText(), selectedTone, null, restrictions.getText(), null, null);
+                    personality.getText(), selectedTone, selectedVoice.id(), restrictions.getText(), null, null);
             Path resting = images.restingPath();
             Path speaking = images.speakingPath();
             updateProfiles(() -> profileService.create(profile, resting, speaking), saved -> {
@@ -213,7 +235,12 @@ public class ScreenGuiCharacter extends JFrame {
         role.setText(profile.role());
         personality.setText(profile.personality());
         tone.getModel().setSelectedItem(profile.tone());
-        voice.getModel().setSelectedItem(profile.voiceId() == null ? DEFAULT_VOICE : profile.voiceId());
+        String voiceId = "pt-BR-FranciscaNeural".equals(profile.voiceId()) ? null : profile.voiceId();
+        VoiceOption savedVoice = VOICES.stream()
+                .filter(optionVoice -> Objects.equals(optionVoice.id(), voiceId))
+                .findFirst()
+                .orElseGet(() -> new VoiceOption(voiceId, voiceId));
+        voice.getModel().setSelectedItem(savedVoice);
         restrictions.setText(profile.restrictions());
     }
 
@@ -246,9 +273,48 @@ public class ScreenGuiCharacter extends JFrame {
     @Override
     public void dispose() {
         if (!updatingProfiles) {
+            if (previewWorker != null) {
+                previewWorker.cancel(true);
+            }
             images.discardDraft();
             super.dispose();
         }
+    }
+
+    private void listenToVoice() {
+        VoiceOption selected = (VoiceOption) voice.getSelectedItem();
+        if (selected == null || previewWorker != null) {
+            return;
+        }
+        listen.setEnabled(false);
+        listen.setText("Aguarde…");
+        previewWorker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                voicePreview.play(selected.id());
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled() || !isDisplayable()) {
+                    return;
+                }
+                previewWorker = null;
+                listen.setText("Ouvir voz");
+                listen.setEnabled(true);
+                try {
+                    get();
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException error) {
+                    JOptionPane.showMessageDialog(ScreenGuiCharacter.this,
+                            "Não foi possível ouvir a voz. " + error.getCause().getMessage(),
+                            "Erro na prévia de voz", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+        previewWorker.execute();
     }
 
     private boolean requireText(JTextComponent field, String label) {
@@ -339,9 +405,9 @@ public class ScreenGuiCharacter extends JFrame {
         return field;
     }
 
-    private JComboBox<String> addDropdown(String label, int y, String... options) {
+    private <T> JComboBox<T> addDropdown(String label, int y, T[] options) {
         addLabel(label, y);
-        JComboBox<String> dropdown = new JComboBox<>(options);
+        JComboBox<T> dropdown = new JComboBox<>(options);
         dropdown.setFont(new Font("Roboto", Font.PLAIN, 12));
         dropdown.setBounds(140, y, 340, 30);
         add(dropdown);

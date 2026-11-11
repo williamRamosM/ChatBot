@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 
@@ -35,11 +36,28 @@ tts_service = TTSService(output_dir=str(STATIC_DIR))
 class ChatRequest(BaseModel):
     message: str
     character: CharacterInstructions | None = None
+    voice_id: str | None = None
+
+
+class VoicePreviewRequest(BaseModel):
+    voice_id: Literal[
+        "pt-BR-FranciscaNeural", "pt-BR-AntonioNeural", "pt-BR-ThalitaMultilingualNeural"
+    ] | None = None
 
 
 @app.get("/")
 def root():
     return {"message": "Ah, claro, mais um humano visitando a raiz. Use a rota /docs se quiser interagir de verdade."}
+
+
+@app.post("/preview-voice")
+async def preview_voice(request: VoicePreviewRequest):
+    try:
+        audio_path = await tts_service.preview_voice(request.voice_id)
+        return {"audio_url": f"/static/{os.path.basename(audio_path)}"}
+    except Exception as error:
+        logger.exception("Erro ao gerar prévia de voz")
+        raise HTTPException(502, "Não foi possível gerar a prévia de voz.") from error
 
 
 @app.post("/generate-voice-chat")
@@ -53,7 +71,7 @@ async def generate_voice(request: ChatRequest):
             raise HTTPException(status_code=502, detail="A IA não retornou uma resposta.")
 
         t1 = time.perf_counter()
-        audio_path = await tts_service.text_to_speech(bot_text)
+        audio_path = await tts_service.text_to_speech(bot_text, request.voice_id)
         logger.info("TTS levou %.1fs", time.perf_counter() - t1)
 
         audio_url = f"/static/{os.path.basename(audio_path)}"

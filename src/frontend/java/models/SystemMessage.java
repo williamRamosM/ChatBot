@@ -36,6 +36,9 @@ public class SystemMessage {
             character.addProperty("tom de voz", profile.tone());
             character.addProperty("restrições", profile.restrictions());
             payload.add("character", character);
+            if (profile.voiceId() != null) {
+                payload.addProperty("voice_id", profile.voiceId());
+            }
         }
 
         HttpRequest request = HttpRequest.newBuilder()
