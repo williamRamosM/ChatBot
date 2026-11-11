@@ -20,7 +20,7 @@ import java.util.concurrent.ExecutionException;
 public class ScreenGuiText extends JFrame {
     private static final int AVATAR_SPACE = 180;
     private static final int CHAT_WIDTH = 300;
-    private static final int CHAT_HEIGHT = 30;
+    private static final int CHAT_HEIGHT = 64;
 
     SystemMessage message = new SystemMessage();
     AudioVoice audio = new AudioVoice();
@@ -45,14 +45,14 @@ public class ScreenGuiText extends JFrame {
         JTextArea chat = new JTextArea();
 
         setLayout(null);
-        setSize(500,56);
+        setSize(500,64);
         setUndecorated(true);
 
         chat.setLineWrap(true);
         chat.setWrapStyleWord(true);
         chat.setOpaque(true);
-        chat.setFont(new Font("Roboto", Font.PLAIN, 12));
-
+        chat.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        chat.setDocument(new ChatDocumentLimit(126));
         chat.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
         chat.setBounds((getWidth() - CHAT_WIDTH) / 2, 10, CHAT_WIDTH, CHAT_HEIGHT);
 
