@@ -22,8 +22,9 @@ class TTSService:
 
     @staticmethod
     def _mp3_para_wav(mp3_path: str, wav_path: str) -> None:
-        decoded = miniaudio.decode_file(
-            mp3_path, output_format=miniaudio.SampleFormat.SIGNED16
+        # Use Python's path handling for filenames with accents on Windows.
+        decoded = miniaudio.decode(
+            Path(mp3_path).read_bytes(), output_format=miniaudio.SampleFormat.SIGNED16
         )
         with wave.open(wav_path, "wb") as w:
             w.setnchannels(decoded.nchannels)
