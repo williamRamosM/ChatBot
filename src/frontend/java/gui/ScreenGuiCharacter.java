@@ -9,8 +9,10 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
 public class ScreenGuiCharacter extends JFrame {
 
@@ -49,9 +51,9 @@ public class ScreenGuiCharacter extends JFrame {
     public ScreenGuiCharacter() {
         setTitle("Criar personagem");
         setLayout(null);
-        setSize(500, 635);
+        setSize(500, 660);
         setUndecorated(true);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
 
         addLabel("Personagens:", 20);
@@ -69,15 +71,15 @@ public class ScreenGuiCharacter extends JFrame {
         voice = addDropdown("Voz do personagem:", 285, DEFAULT_VOICE);
         restrictions = addTextArea("Restrições:", 330);
 
-        images.setBounds(20, 415, 460, 140);
+        images.setBounds(20, 415, 460, 162);
         add(images);
 
-        delete.setBounds(20, 575, 92, 36);
+        delete.setBounds(20, 600, 92, 36);
         delete.setEnabled(false);
         delete.addActionListener(event -> deleteSelectedProfile());
         add(delete);
 
-        start.setBounds(388, 575, 92, 36);
+        start.setBounds(388, 600, 92, 36);
         start.addActionListener(event -> {
             ProfileOption option = (ProfileOption) characters.getSelectedItem();
             if (option.profile() != null) {
@@ -104,10 +106,13 @@ public class ScreenGuiCharacter extends JFrame {
                 return;
             }
             CharacterProfile profile = new CharacterProfile(name.getText(), role.getText(),
-                    personality.getText(), selectedTone, null, restrictions.getText(),
-                    profileService.relativeImagePath(images.restingPath()),
-                    profileService.relativeImagePath(images.speakingPath()));
-            updateProfiles(() -> profileService.append(profile), () -> openChat(profile),
+                    personality.getText(), selectedTone, null, restrictions.getText(), null, null);
+            Path resting = images.restingPath();
+            Path speaking = images.speakingPath();
+            updateProfiles(() -> profileService.create(profile, resting, speaking), saved -> {
+                images.showProfile(null);
+                openChat(saved);
+            },
                     "Não foi possível salvar o personagem.");
         });
         add(start);
@@ -199,6 +204,14 @@ public class ScreenGuiCharacter extends JFrame {
         dispose();
     }
 
+    @Override
+    public void dispose() {
+        if (!updatingProfiles) {
+            images.discardDraft();
+            super.dispose();
+        }
+    }
+
     private boolean requireText(JTextComponent field, String label) {
         if (!field.getText().isBlank()) {
             return true;
@@ -215,34 +228,37 @@ public class ScreenGuiCharacter extends JFrame {
             return;
         }
         CharacterProfile profile = characters.getItemAt(index).profile();
-        updateProfiles(() -> profileService.delete(profile), () -> {
+        updateProfiles(() -> {
+            profileService.delete(profile);
+            return null;
+        }, ignored -> {
             characters.setSelectedIndex(0);
             characters.removeItemAt(index);
         }, "Não foi possível excluir o personagem.");
     }
 
     @FunctionalInterface
-    private interface ProfileUpdate {
-        void run() throws IOException;
+    private interface ProfileUpdate<T> {
+        T run() throws IOException;
     }
 
-    private void updateProfiles(ProfileUpdate update, Runnable onSuccess, String errorMessage) {
+    private <T> void updateProfiles(ProfileUpdate<T> update, Consumer<T> onSuccess, String errorMessage) {
         updatingProfiles = true;
         images.setLocked(true);
         characters.setEnabled(false);
         start.setEnabled(false);
         delete.setEnabled(false);
-        new SwingWorker<Void, Void>() {
+        new SwingWorker<T, Void>() {
             @Override
-            protected Void doInBackground() throws IOException {
-                update.run();
-                return null;
+            protected T doInBackground() throws IOException {
+                return update.run();
             }
 
             @Override
             protected void done() {
+                T result;
                 try {
-                    get();
+                    result = get();
                 } catch (InterruptedException error) {
                     Thread.currentThread().interrupt();
                     return;
@@ -258,7 +274,7 @@ public class ScreenGuiCharacter extends JFrame {
                     start.setEnabled(true);
                     delete.setEnabled(characters.getSelectedIndex() > 0);
                 }
-                onSuccess.run();
+                onSuccess.accept(result);
             }
         }.execute();
     }

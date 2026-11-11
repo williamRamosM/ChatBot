@@ -15,27 +15,39 @@ public class CharacterImageService {
     private static final Path PROFILES_DIRECTORY = Path.of("data", "personagens").toAbsolutePath();
     private static final Path IMAGES_DIRECTORY = PROFILES_DIRECTORY.resolve("imagens");
 
-    public CharacterImage importImage(Path source) throws IOException {
-        String name = source.getFileName().toString();
-        String extension = name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+    CharacterImage importImage(Path source, Path directory) throws IOException {
+        String extension = extensionOf(source);
         if (!List.of("png", "jpg", "jpeg", "webp", "gif", "bmp").contains(extension)) {
             throw new IllegalArgumentException("Escolha uma imagem PNG, JPEG, WebP, GIF ou BMP.");
         }
 
-        BufferedImage image = readImage(source);
-        Files.createDirectories(IMAGES_DIRECTORY);
-        Path savedPath = Files.createTempFile(IMAGES_DIRECTORY, "personagem-", "." + extension);
+        Path copy = copyImage(source, directory, extension);
         try {
-            Files.copy(source, savedPath, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException error) {
-            try {
-                Files.deleteIfExists(savedPath);
-            } catch (IOException cleanupError) {
-                error.addSuppressed(cleanupError);
-            }
+            return new CharacterImage(copy, readImage(copy));
+        } catch (IOException | RuntimeException error) {
+            discardAfterFailure(copy, error);
             throw error;
         }
-        return new CharacterImage(savedPath, image);
+    }
+
+    Path persistDraft(Path source) throws IOException {
+        return source == null ? null : copyImage(source, IMAGES_DIRECTORY, extensionOf(source));
+    }
+
+    private String extensionOf(Path source) {
+        String name = source.getFileName().toString();
+        return name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private Path copyImage(Path source, Path directory, String extension) throws IOException {
+        Files.createDirectories(directory);
+        Path copy = Files.createTempFile(directory, "personagem-", "." + extension);
+        try {
+            return Files.copy(source, copy, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException | RuntimeException error) {
+            discardAfterFailure(copy, error);
+            throw error;
+        }
     }
 
     public BufferedImage loadImage(String relativePath) throws IOException {
@@ -45,6 +57,30 @@ public class CharacterImageService {
             throw new IOException("O caminho da imagem precisa ser relativo à pasta do perfil.");
         }
         return readImage(path);
+    }
+
+    CharacterImage savePng(BufferedImage image, Path directory) throws IOException {
+        Path path = Files.createTempFile(directory, "personagem-", ".png");
+        try {
+            if (!ImageIO.write(image, "png", path.toFile())) {
+                throw new IOException("Não foi possível gravar a imagem em PNG.");
+            }
+            return new CharacterImage(path, image);
+        } catch (IOException | RuntimeException error) {
+            discardAfterFailure(path, error);
+            throw error;
+        }
+    }
+
+    static void discardAfterFailure(Path path, Throwable originalError) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException | RuntimeException cleanupError) {
+            originalError.addSuppressed(cleanupError);
+        }
     }
 
     private BufferedImage readImage(Path path) throws IOException {

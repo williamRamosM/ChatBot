@@ -1,7 +1,11 @@
 package gui;
 
+import models.CharacterImage;
 import models.CharacterProfile;
+import services.BackgroundRemovalService;
+import services.CharacterImageDraft;
 import services.CharacterImageService;
+import services.SpeakingImageService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -17,11 +21,17 @@ import java.util.function.Consumer;
 
 final class CharacterImagesPanel extends JPanel {
     private final CharacterImageService images = new CharacterImageService();
+    private final SpeakingImageService generator = new SpeakingImageService();
+    private final BackgroundRemovalService backgroundRemoval = new BackgroundRemovalService();
     private final JLabel restingPreview;
     private final JLabel speakingPreview;
+    private final JButton generate = new JButton("Gerar imagem falando");
+    private final JButton removeResting;
+    private final JButton removeSpeaking;
     private final Consumer<Boolean> onBusy;
-    private Path restingPath;
-    private Path speakingPath;
+    private CharacterImageDraft draft;
+    private CharacterImage resting;
+    private CharacterImage speaking;
     private boolean editable = true;
     private boolean locked;
     private boolean busy;
@@ -32,28 +42,37 @@ final class CharacterImagesPanel extends JPanel {
         setLayout(null);
         restingPreview = addPreview("Imagem em repouso", 0, false);
         speakingPreview = addPreview("Imagem falando", 135, true);
+        removeResting = addRemoveButton(0, false);
+        removeSpeaking = addRemoveButton(135, true);
+        generate.setBounds(265, 58, 195, 32);
+        generate.addActionListener(event -> generateSpeakingImage());
+        add(generate);
         showProfile(null);
     }
 
     Path restingPath() {
-        return restingPath;
+        return resting == null ? null : resting.path();
     }
 
     Path speakingPath() {
-        return speakingPath;
+        return speaking == null ? null : speaking.path();
     }
 
     void setLocked(boolean locked) {
         this.locked = locked;
+        updateControls();
     }
 
     void showProfile(CharacterProfile profile) {
         int currentSelection = ++selection;
+        discardDraft();
+        draft = new CharacterImageDraft();
         editable = profile == null;
-        restingPath = null;
-        speakingPath = null;
+        resting = null;
+        speaking = null;
         setPreview(restingPreview, null, editable ? "Arraste a imagem" : "Sem imagem");
         setPreview(speakingPreview, null, editable ? "Primeiro, a base" : "Sem imagem");
+        updateControls();
         if (profile == null) {
             return;
         }
@@ -82,6 +101,17 @@ final class CharacterImagesPanel extends JPanel {
         }.execute();
     }
 
+    void discardDraft() {
+        if (draft == null) {
+            return;
+        }
+        try {
+            draft.close();
+        } catch (IOException error) {
+            System.err.println("Não foi possível limpar o rascunho: " + error.getMessage());
+        }
+    }
+
     private record Previews(ImageIcon resting, ImageIcon speaking) {
     }
 
@@ -98,7 +128,7 @@ final class CharacterImagesPanel extends JPanel {
         preview.setTransferHandler(new TransferHandler() {
             @Override
             public boolean canImport(TransferSupport support) {
-                return canEdit() && (!speakingFrame || restingPath != null)
+                return canEdit() && (!speakingFrame || resting != null)
                         && support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
             }
 
@@ -112,17 +142,10 @@ final class CharacterImagesPanel extends JPanel {
                     if (files.size() != 1 || !(files.getFirst() instanceof File file) || !file.isFile()) {
                         throw new IllegalArgumentException("Arraste apenas um arquivo de imagem por vez.");
                     }
-                    runImageTask(() -> images.importImage(file.toPath()), imported -> {
-                        if (speakingFrame) {
-                            speakingPath = imported.path();
-                        } else {
-                            restingPath = imported.path();
-                            if (speakingPath == null) {
-                                setPreview(speakingPreview, null, "Arraste a imagem");
-                            }
-                        }
-                        setPreview(preview, icon(imported.image()), "");
-                    });
+                    CharacterImageDraft currentDraft = draft;
+                    Path previous = speakingFrame ? speakingPath() : restingPath();
+                    runImageTask(() -> currentDraft.importImage(file.toPath(), previous),
+                            imported -> showDraftImage(speakingFrame, imported));
                     return true;
                 } catch (Exception error) {
                     showError(error);
@@ -134,8 +157,81 @@ final class CharacterImagesPanel extends JPanel {
         return preview;
     }
 
+    private JButton addRemoveButton(int x, boolean speakingFrame) {
+        JButton button = new JButton("Remover fundo");
+        button.setFont(new Font("Roboto", Font.PLAIN, 11));
+        button.setMargin(new Insets(0, 2, 0, 2));
+        button.setBounds(x, 136, 110, 25);
+        button.getAccessibleContext().setAccessibleName(speakingFrame
+                ? "Remover fundo da imagem falando" : "Remover fundo da imagem em repouso");
+        button.addActionListener(event -> removeBackground(speakingFrame));
+        add(button);
+        return button;
+    }
+
+    private void showDraftImage(boolean speakingFrame, CharacterImage image) {
+        if (speakingFrame) {
+            speaking = image;
+            setPreview(speakingPreview, icon(image.image()), "");
+        } else {
+            resting = image;
+            setPreview(restingPreview, icon(image.image()), "");
+            if (speaking == null) {
+                setPreview(speakingPreview, null, "Arraste a imagem");
+            }
+        }
+    }
+
+    private void removeBackground(boolean speakingFrame) {
+        CharacterImage frame = speakingFrame ? speaking : resting;
+        if (!canEdit() || frame == null) {
+            return;
+        }
+        BufferedImage original = frame.image();
+        runImageTask(() -> backgroundRemoval.remove(original), candidate -> {
+            if (confirmImage(original, candidate, "Usar a imagem sem fundo?", "Original", "Sem fundo")) {
+                saveProcessedImage(speakingFrame, candidate);
+            }
+        });
+    }
+
+    private void generateSpeakingImage() {
+        if (!canEdit() || resting == null) {
+            return;
+        }
+        BufferedImage original = resting.image();
+        runImageTask(() -> generator.generate(original), candidate -> {
+            if (confirmImage(original, candidate, "Usar a imagem gerada?", "Em repouso", "Falando")) {
+                saveProcessedImage(true, candidate);
+            }
+        });
+    }
+
+    private boolean confirmImage(BufferedImage original, BufferedImage candidate, String title,
+                                 String originalLabel, String candidateLabel) {
+        JPanel comparison = new JPanel(new GridLayout(1, 2, 12, 0));
+        comparison.add(comparisonPreview(original, originalLabel));
+        comparison.add(comparisonPreview(candidate, candidateLabel));
+        return JOptionPane.showConfirmDialog(this, comparison, title,
+                JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.YES_OPTION;
+    }
+
+    private JLabel comparisonPreview(BufferedImage image, String caption) {
+        JLabel preview = new JLabel(caption, icon(image), SwingConstants.CENTER);
+        preview.setHorizontalTextPosition(SwingConstants.CENTER);
+        preview.setVerticalTextPosition(SwingConstants.TOP);
+        return preview;
+    }
+
+    private void saveProcessedImage(boolean speakingFrame, BufferedImage candidate) {
+        CharacterImageDraft currentDraft = draft;
+        Path previous = speakingFrame ? speakingPath() : restingPath();
+        runImageTask(() -> currentDraft.savePng(candidate, previous), saved -> showDraftImage(speakingFrame, saved));
+    }
+
     private <T> void runImageTask(Callable<T> task, Consumer<T> onSuccess) {
         busy = true;
+        updateControls();
         onBusy.accept(true);
         new SwingWorker<T, Void>() {
             @Override
@@ -158,17 +254,26 @@ final class CharacterImagesPanel extends JPanel {
                     return;
                 } finally {
                     busy = false;
+                    updateControls();
                     onBusy.accept(false);
                 }
                 if (isDisplayable()) {
                     onSuccess.accept(result);
                 }
+                updateControls();
             }
         }.execute();
     }
 
     private boolean canEdit() {
         return editable && !locked && !busy;
+    }
+
+    private void updateControls() {
+        generate.setEnabled(canEdit() && resting != null);
+        generate.setText(busy ? "Processando imagem…" : "Gerar imagem falando");
+        removeResting.setEnabled(canEdit() && resting != null);
+        removeSpeaking.setEnabled(canEdit() && speaking != null);
     }
 
     private ImageIcon loadPreview(String path) {

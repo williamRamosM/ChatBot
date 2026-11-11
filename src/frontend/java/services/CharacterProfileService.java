@@ -24,11 +24,30 @@ public class CharacterProfileService {
             .setPrettyPrinting()
             .create();
 
-    public String relativeImagePath(Path image) {
+    private String relativeImagePath(Path image) {
         if (image == null) {
             return null;
         }
         return DIRECTORY.relativize(image.toAbsolutePath()).toString().replace('\\', '/');
+    }
+
+    public CharacterProfile create(CharacterProfile profile, Path restingDraft, Path speakingDraft) throws IOException {
+        CharacterImageService images = new CharacterImageService();
+        Path resting = null;
+        Path speaking = null;
+        try {
+            resting = images.persistDraft(restingDraft);
+            speaking = images.persistDraft(speakingDraft);
+            CharacterProfile saved = new CharacterProfile(profile.name(), profile.role(), profile.personality(),
+                    profile.tone(), profile.voiceId(), profile.restrictions(),
+                    relativeImagePath(resting), relativeImagePath(speaking));
+            append(saved);
+            return saved;
+        } catch (IOException | RuntimeException error) {
+            CharacterImageService.discardAfterFailure(speaking, error);
+            CharacterImageService.discardAfterFailure(resting, error);
+            throw error;
+        }
     }
 
     public synchronized void append(CharacterProfile profile) throws IOException {
@@ -56,8 +75,9 @@ public class CharacterProfileService {
         try {
             Files.writeString(temporary, GSON.toJson(profiles) + System.lineSeparator());
             Files.move(temporary, PROFILES, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } finally {
-            Files.deleteIfExists(temporary);
+        } catch (IOException | RuntimeException error) {
+            CharacterImageService.discardAfterFailure(temporary, error);
+            throw error;
         }
     }
 

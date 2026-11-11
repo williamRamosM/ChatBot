@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from scriptAI import ScriptAI
+from service_avatar import router as avatar_router
+from service_background import router as background_router
 from service_tts import TTSService
 
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +24,8 @@ STATIC_DIR = BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
+app.include_router(avatar_router)
+app.include_router(background_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 luna = ScriptAI()
