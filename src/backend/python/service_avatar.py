@@ -8,7 +8,11 @@ from fastapi import APIRouter, HTTPException, Request, Response
 router = APIRouter()
 MODEL = "@cf/black-forest-labs/flux-2-klein-4b"
 PROMPT = (
-    "Edit only the mouth so the same character appears to be speaking with its mouth open. "
+    "Create a speaking frame of the same character with a clearly visible open mouth. "
+    "If the reference already has a mouth, open that mouth in place. "
+    "If the reference has no visible mouth or face, add one small open mouth near the lower center "
+    "of the main subject, entirely inside its silhouette, matching the reference style. "
+    "Limit the edit to the mouth area. "
     "Keep the character's identity, style, pose, scale, position, framing, and background. "
     "Do not zoom, crop, move the character, or add any text."
 )
