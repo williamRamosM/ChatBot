@@ -65,6 +65,7 @@ public class ScreenGuiText extends JFrame {
                     exit();
                 }
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    e.consume();
                     String text = chat.getText();
                     if(text == null || text.trim().isEmpty()) {
                         System.out.println("System > Mensagem vazia");
