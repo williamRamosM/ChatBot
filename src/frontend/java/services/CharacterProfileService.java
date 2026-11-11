@@ -79,6 +79,7 @@ public class CharacterProfileService {
     private JsonArray readProfiles() throws IOException {
         if (Files.notExists(PROFILES)) {
             copyInitialResource("imagens/nasa.png");
+            copyInitialResource("imagens/nasa-falando.png");
             copyInitialResource("personagens.json");
         }
         try (var reader = Files.newBufferedReader(PROFILES)) {

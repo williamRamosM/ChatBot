@@ -1,20 +1,14 @@
 package gui;
 
-import models.CharacterImage;
 import models.CharacterProfile;
-import services.CharacterImageService;
 import services.CharacterProfileService;
 
 import javax.swing.*;
 import javax.swing.text.JTextComponent;
 import java.awt.*;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.image.BufferedImage;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -26,8 +20,6 @@ public class ScreenGuiCharacter extends JFrame {
     private int mouseY;
     private boolean importingImage;
     private boolean updatingProfiles;
-    private Path selectedImage;
-    private final CharacterImageService imageService = new CharacterImageService();
     private final CharacterProfileService profileService = new CharacterProfileService();
     private final JComboBox<ProfileOption> characters = new JComboBox<>();
     private final JButton delete = roundedButton("Deletar", "personagens", new Color(185, 28, 28));
@@ -38,7 +30,10 @@ public class ScreenGuiCharacter extends JFrame {
     private final JComboBox<String> tone;
     private final JComboBox<String> voice;
     private final JTextArea restrictions;
-    private final JLabel image = new JLabel("Arraste a imagem", SwingConstants.CENTER);
+    private final CharacterImagesPanel images = new CharacterImagesPanel(busy -> {
+        importingImage = busy;
+        characters.setEnabled(!busy);
+    });
 
     private record ProfileOption(CharacterProfile profile) {
         @Override
@@ -74,41 +69,8 @@ public class ScreenGuiCharacter extends JFrame {
         voice = addDropdown("Voz do personagem:", 285, DEFAULT_VOICE);
         restrictions = addTextArea("Restrições:", 330);
 
-        addLabel("Img personagem:", 415);
-        image.setFont(new Font("Roboto", Font.PLAIN, 12));
-        image.setForeground(Color.GRAY);
-        image.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-        image.setBounds(140, 415, 110, 110);
-        add(image);
-
-        TransferHandler imageDrop = new TransferHandler() {
-            @Override
-            public boolean canImport(TransferSupport support) {
-                return characters.getSelectedIndex() == 0 && !importingImage && !updatingProfiles
-                        && support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
-            }
-
-            @Override
-            public boolean importData(TransferSupport support) {
-                if (!canImport(support)) {
-                    return false;
-                }
-                try {
-                    List<?> files = (List<?>) support.getTransferable()
-                            .getTransferData(DataFlavor.javaFileListFlavor);
-                    if (files.size() != 1 || !(files.getFirst() instanceof File file) || !file.isFile()) {
-                        throw new IllegalArgumentException("Arraste apenas um arquivo de imagem por vez.");
-                    }
-                    importImage(file.toPath(), image);
-                    return true;
-                } catch (Exception error) {
-                    JOptionPane.showMessageDialog(ScreenGuiCharacter.this, error.getMessage(),
-                            "Erro ao receber imagem", JOptionPane.ERROR_MESSAGE);
-                    return false;
-                }
-            }
-        };
-        image.setTransferHandler(imageDrop);
+        images.setBounds(20, 415, 460, 140);
+        add(images);
 
         delete.setBounds(20, 575, 92, 36);
         delete.setEnabled(false);
@@ -143,7 +105,8 @@ public class ScreenGuiCharacter extends JFrame {
             }
             CharacterProfile profile = new CharacterProfile(name.getText(), role.getText(),
                     personality.getText(), selectedTone, null, restrictions.getText(),
-                    profileService.relativeImagePath(selectedImage));
+                    profileService.relativeImagePath(images.restingPath()),
+                    profileService.relativeImagePath(images.speakingPath()));
             updateProfiles(() -> profileService.append(profile), () -> openChat(profile),
                     "Não foi possível salvar o personagem.");
         });
@@ -213,14 +176,12 @@ public class ScreenGuiCharacter extends JFrame {
         fields.forEach(field -> field.setEditable(creating));
         tone.setEnabled(creating);
         voice.setEnabled(creating);
-        selectedImage = null;
-        image.setIcon(null);
+        images.showProfile(profile);
 
         if (creating) {
             fields.forEach(field -> field.setText(""));
             tone.setSelectedIndex(-1);
             voice.setSelectedIndex(0);
-            image.setText("Arraste a imagem");
             return;
         }
 
@@ -230,38 +191,6 @@ public class ScreenGuiCharacter extends JFrame {
         tone.getModel().setSelectedItem(profile.tone());
         voice.getModel().setSelectedItem(profile.voiceId() == null ? DEFAULT_VOICE : profile.voiceId());
         restrictions.setText(profile.restrictions());
-        if (profile.imagePath() == null || profile.imagePath().isBlank()) {
-            image.setText("Sem imagem");
-            return;
-        }
-
-        image.setText("Carregando imagem");
-        loadPreview(option);
-    }
-
-    private void loadPreview(ProfileOption option) {
-        new SwingWorker<ImageIcon, Void>() {
-            @Override
-            protected ImageIcon doInBackground() throws IOException {
-                return createPreview(imageService.loadImage(option.profile().imagePath()));
-            }
-
-            @Override
-            protected void done() {
-                if (characters.getSelectedItem() != option || !isDisplayable()) {
-                    return;
-                }
-                try {
-                    image.setIcon(get());
-                    image.setText(null);
-                } catch (InterruptedException error) {
-                    Thread.currentThread().interrupt();
-                    image.setText("Imagem indisponível");
-                } catch (ExecutionException error) {
-                    image.setText("Imagem indisponível");
-                }
-            }
-        }.execute();
     }
 
     private void openChat(CharacterProfile profile) {
@@ -299,6 +228,7 @@ public class ScreenGuiCharacter extends JFrame {
 
     private void updateProfiles(ProfileUpdate update, Runnable onSuccess, String errorMessage) {
         updatingProfiles = true;
+        images.setLocked(true);
         characters.setEnabled(false);
         start.setEnabled(false);
         delete.setEnabled(false);
@@ -323,6 +253,7 @@ public class ScreenGuiCharacter extends JFrame {
                     return;
                 } finally {
                     updatingProfiles = false;
+                    images.setLocked(false);
                     characters.setEnabled(true);
                     start.setEnabled(true);
                     delete.setEnabled(characters.getSelectedIndex() > 0);
@@ -330,45 +261,6 @@ public class ScreenGuiCharacter extends JFrame {
                 onSuccess.run();
             }
         }.execute();
-    }
-
-    private void importImage(Path source, JLabel preview) {
-        importingImage = true;
-        characters.setEnabled(false);
-        SwingWorker<CharacterImage, Void> worker = new SwingWorker<>() {
-            @Override
-            protected CharacterImage doInBackground() throws Exception {
-                return imageService.importImage(source);
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    CharacterImage imported = get();
-                    preview.setIcon(createPreview(imported.image()));
-                    preview.setText(null);
-                    selectedImage = imported.path();
-                } catch (InterruptedException error) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException error) {
-                    JOptionPane.showMessageDialog(ScreenGuiCharacter.this,
-                            "Não foi possível importar a imagem. " + error.getCause().getMessage(),
-                            "Erro ao importar imagem", JOptionPane.ERROR_MESSAGE);
-                } finally {
-                    importingImage = false;
-                    characters.setEnabled(true);
-                }
-            }
-        };
-        worker.execute();
-    }
-
-    private ImageIcon createPreview(BufferedImage image) {
-        double scale = Math.min(106.0 / image.getWidth(), 106.0 / image.getHeight());
-        Image thumbnail = image.getScaledInstance(
-                Math.max(1, (int) (image.getWidth() * scale)),
-                Math.max(1, (int) (image.getHeight() * scale)), Image.SCALE_SMOOTH);
-        return new ImageIcon(thumbnail);
     }
 
     private void addLabel(String text, int y) {

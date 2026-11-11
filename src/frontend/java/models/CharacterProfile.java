@@ -9,6 +9,7 @@ public record CharacterProfile(
         @SerializedName("tom de voz") String tone,
         @SerializedName("voice_id") String voiceId,
         @SerializedName("restrições") String restrictions,
-        @SerializedName("img personagem") String imagePath
+        @SerializedName("img personagem") String imagePath,
+        @SerializedName("img falando") String speakingImagePath
 ) {
 }
