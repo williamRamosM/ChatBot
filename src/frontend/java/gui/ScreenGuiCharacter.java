@@ -17,6 +17,8 @@ import java.util.function.Consumer;
 public class ScreenGuiCharacter extends JFrame {
 
     private static final String DEFAULT_VOICE = "Voz padrão";
+    private static final String OTHER_GENDER = "Outro";
+    private static final List<String> STANDARD_GENDERS = List.of("Feminino", "Masculino", "Neutro");
 
     private int mouseX;
     private int mouseY;
@@ -27,6 +29,8 @@ public class ScreenGuiCharacter extends JFrame {
     private final JButton delete = roundedButton("Deletar", "personagens", new Color(185, 28, 28));
     private final JButton start = roundedButton("Iniciar", "personagem", new Color(29, 78, 216));
     private final JTextField name;
+    private final JComboBox<String> gender;
+    private final JTextField customGender;
     private final JTextField role;
     private final JTextArea personality;
     private final JComboBox<String> tone;
@@ -63,13 +67,22 @@ public class ScreenGuiCharacter extends JFrame {
         add(characters);
 
         name = addTextField("Nome:", 65);
-        role = addTextField("Função:", 110);
-        personality = addTextArea("Personalidade:", 155);
-        tone = addDropdown("Tom de voz:", 240,
+        gender = addDropdown("Gênero:", 105, STANDARD_GENDERS.toArray(String[]::new));
+        gender.addItem(OTHER_GENDER);
+        gender.setSelectedIndex(-1);
+        gender.setBounds(140, 105, 145, 30);
+        customGender = addTextField(295, 105, 185);
+        customGender.getAccessibleContext().setAccessibleName("Gênero personalizado");
+        customGender.setVisible(false);
+        gender.addActionListener(event -> customGender.setVisible(OTHER_GENDER.equals(gender.getSelectedItem())));
+
+        role = addTextField("Função:", 145);
+        personality = addTextArea("Personalidade:", 185);
+        tone = addDropdown("Tom de voz:", 260,
                 "Calmo", "Animado", "Sério", "Acolhedor", "Firme", "Provocador", "Ríspido");
         tone.setSelectedIndex(-1);
-        voice = addDropdown("Voz do personagem:", 285, DEFAULT_VOICE);
-        restrictions = addTextArea("Restrições:", 330);
+        voice = addDropdown("Voz do personagem:", 300, DEFAULT_VOICE);
+        restrictions = addTextArea("Restrições:", 340);
 
         images.setBounds(20, 415, 460, 162);
         add(images);
@@ -90,8 +103,11 @@ public class ScreenGuiCharacter extends JFrame {
                 JOptionPane.showMessageDialog(this, "Aguarde a importação da imagem.");
                 return;
             }
-            if (!requireText(name, "Nome")
-                    || !requireText(role, "Função")
+            if (!requireText(name, "Nome")) {
+                return;
+            }
+            String selectedGender = readGender();
+            if (selectedGender == null || !requireText(role, "Função")
                     || !requireText(personality, "Personalidade")) {
                 return;
             }
@@ -105,7 +121,7 @@ public class ScreenGuiCharacter extends JFrame {
             if (!requireText(restrictions, "Restrições")) {
                 return;
             }
-            CharacterProfile profile = new CharacterProfile(name.getText(), role.getText(),
+            CharacterProfile profile = new CharacterProfile(name.getText(), selectedGender, role.getText(),
                     personality.getText(), selectedTone, null, restrictions.getText(), null, null);
             Path resting = images.restingPath();
             Path speaking = images.speakingPath();
@@ -179,9 +195,12 @@ public class ScreenGuiCharacter extends JFrame {
         delete.setEnabled(!creating && !updatingProfiles);
         List<JTextComponent> fields = List.of(name, role, personality, restrictions);
         fields.forEach(field -> field.setEditable(creating));
+        gender.setEnabled(creating);
+        customGender.setEditable(creating);
         tone.setEnabled(creating);
         voice.setEnabled(creating);
         images.showProfile(profile);
+        showGender(creating ? null : profile.gender());
 
         if (creating) {
             fields.forEach(field -> field.setText(""));
@@ -196,6 +215,26 @@ public class ScreenGuiCharacter extends JFrame {
         tone.getModel().setSelectedItem(profile.tone());
         voice.getModel().setSelectedItem(profile.voiceId() == null ? DEFAULT_VOICE : profile.voiceId());
         restrictions.setText(profile.restrictions());
+    }
+
+    private void showGender(String value) {
+        String saved = value == null || value.isBlank() ? null : value;
+        boolean custom = saved != null && !STANDARD_GENDERS.contains(saved);
+        gender.setSelectedItem(custom ? OTHER_GENDER : saved);
+        customGender.setText(custom ? saved : "");
+    }
+
+    private String readGender() {
+        String selected = (String) gender.getSelectedItem();
+        if (selected == null) {
+            JOptionPane.showMessageDialog(this, "Selecione um gênero.", "Campo obrigatório", JOptionPane.WARNING_MESSAGE);
+            gender.requestFocusInWindow();
+            return null;
+        }
+        if (OTHER_GENDER.equals(selected)) {
+            return requireText(customGender, "Gênero personalizado") ? customGender.getText().strip() : null;
+        }
+        return selected;
     }
 
     private void openChat(CharacterProfile profile) {
@@ -288,10 +327,14 @@ public class ScreenGuiCharacter extends JFrame {
 
     private JTextField addTextField(String label, int y) {
         addLabel(label, y);
+        return addTextField(140, y, 340);
+    }
+
+    private JTextField addTextField(int x, int y, int width) {
         JTextField field = new JTextField();
         field.setFont(new Font("Roboto", Font.PLAIN, 12));
         field.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-        field.setBounds(140, y, 340, 30);
+        field.setBounds(x, y, width, 30);
         add(field);
         return field;
     }

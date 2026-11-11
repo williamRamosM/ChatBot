@@ -1,6 +1,7 @@
 package models;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 
 import java.io.IOException;
 import java.net.URI;
@@ -8,7 +9,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Map;
 
 public class SystemMessage {
 
@@ -21,13 +21,28 @@ public class SystemMessage {
     private final Gson gson = new Gson();
 
     public ChatResponse enviarMensagem(String mensagem) throws IOException, InterruptedException {
-        String jsonPayload = gson.toJson(Map.of("message", mensagem));
+        return enviarMensagem(mensagem, null);
+    }
+
+    public ChatResponse enviarMensagem(String mensagem, CharacterProfile profile) throws IOException, InterruptedException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("message", mensagem);
+        if (profile != null) {
+            JsonObject character = new JsonObject();
+            character.addProperty("nome", profile.name());
+            character.addProperty("gênero", profile.gender());
+            character.addProperty("função", profile.role());
+            character.addProperty("personalidade", profile.personality());
+            character.addProperty("tom de voz", profile.tone());
+            character.addProperty("restrições", profile.restrictions());
+            payload.add("character", character);
+        }
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL))
                 .timeout(Duration.ofSeconds(30))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(payload)))
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

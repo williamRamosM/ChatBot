@@ -154,7 +154,7 @@ public class ScreenGuiText extends JFrame {
             @Override
             protected Void doInBackground() {
                 try {
-                    ChatResponse chatResponse = message.enviarMensagem(mensagem);
+                    ChatResponse chatResponse = message.enviarMensagem(mensagem, activeProfile);
                     System.out.println("System > " + chatResponse.getTextResponse());
                     audio.tocarAudio(chatResponse.getAudioUrl());
                 } catch (Exception ex) {

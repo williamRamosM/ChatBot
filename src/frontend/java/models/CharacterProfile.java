@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName;
 
 public record CharacterProfile(
         @SerializedName("nome") String name,
+        @SerializedName("gênero") String gender,
         @SerializedName("função") String role,
         @SerializedName("personalidade") String personality,
         @SerializedName("tom de voz") String tone,

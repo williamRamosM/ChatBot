@@ -38,8 +38,8 @@ public class CharacterProfileService {
         try {
             resting = images.persistDraft(restingDraft);
             speaking = images.persistDraft(speakingDraft);
-            CharacterProfile saved = new CharacterProfile(profile.name(), profile.role(), profile.personality(),
-                    profile.tone(), profile.voiceId(), profile.restrictions(),
+            CharacterProfile saved = new CharacterProfile(profile.name(), profile.gender(), profile.role(),
+                    profile.personality(), profile.tone(), profile.voiceId(), profile.restrictions(),
                     relativeImagePath(resting), relativeImagePath(speaking));
             append(saved);
             return saved;

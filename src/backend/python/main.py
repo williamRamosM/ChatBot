@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from scriptAI import ScriptAI
+from scriptAI import CharacterInstructions, ScriptAI
 from service_avatar import router as avatar_router
 from service_background import router as background_router
 from service_tts import TTSService
@@ -34,6 +34,7 @@ tts_service = TTSService(output_dir=str(STATIC_DIR))
 
 class ChatRequest(BaseModel):
     message: str
+    character: CharacterInstructions | None = None
 
 
 @app.get("/")
@@ -45,7 +46,7 @@ def root():
 async def generate_voice(request: ChatRequest):
     try:
         t0 = time.perf_counter()
-        bot_text = await luna.generate_response(request.message)
+        bot_text = await luna.generate_response(request.message, request.character)
         logger.info("Gemini levou %.1fs", time.perf_counter() - t0)
 
         if not bot_text:
