@@ -1,7 +1,8 @@
-import gui.ScreenGuiText;
+import gui.ScreenGuiCharacter;
+import javax.swing.SwingUtilities;
 
 public class Main {
     public static void main(String[] args) {
-        ScreenGuiText gui = new ScreenGuiText();
+        SwingUtilities.invokeLater(ScreenGuiCharacter::new);
     }
 }

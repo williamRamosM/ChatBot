@@ -1,6 +1,7 @@
 package gui;
 
 import models.AudioVoice;
+import models.CharacterProfile;
 import models.ChatResponse;
 import models.SystemMessage;
 
@@ -21,8 +22,17 @@ public class ScreenGuiText extends JFrame {
 
     private int mouseX;
     private int mouseY;
+    private final CharacterProfile activeProfile;
 
-    public ScreenGuiText(){
+    public ScreenGuiText() {
+        this(null);
+    }
+
+    public ScreenGuiText(CharacterProfile profile) {
+        activeProfile = profile;
+        if (activeProfile != null) {
+            setTitle(activeProfile.name());
+        }
 
         JTextArea chat = new JTextArea();
 
