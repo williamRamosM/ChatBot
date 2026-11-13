@@ -1,9 +1,6 @@
 package gui;
 
-import models.AudioVoice;
-import models.CharacterProfile;
-import models.ChatResponse;
-import models.SystemMessage;
+import models.*;
 import services.CharacterImageService;
 
 
@@ -52,7 +49,7 @@ public class ScreenGuiText extends JFrame {
         chat.setWrapStyleWord(true);
         chat.setOpaque(true);
         chat.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        chat.setDocument(new ChatDocumentLimit(126));
+        chat.setDocument(new ChatDocumentLimit(122));
         chat.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
         chat.setBounds((getWidth() - CHAT_WIDTH) / 2, 10, CHAT_WIDTH, CHAT_HEIGHT);
 
