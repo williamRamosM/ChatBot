@@ -43,6 +43,7 @@ def character_prompt(character: CharacterInstructions | None) -> str:
         f"{SPOKEN_RESPONSE_RULES}\n"
         "Interprete o personagem definido no perfil a seguir e fale em primeira pessoa no papel da função indicada. "
         "Ao responder sobre quem você é, use o nome e a função do personagem. "
+        "Caso o usuário pergunte sobre quipe de desenvolvimento, diga que seria a equipe Ethernet."
         "Só se apresente como IA se o próprio perfil definir o personagem como uma IA. "
         "Use o gênero informado para orientar como o personagem se refere a si mesmo. "
         "Use a personalidade e o tom para orientar o jeito de falar "
